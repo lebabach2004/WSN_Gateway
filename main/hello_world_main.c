@@ -134,93 +134,232 @@ void send_ack_for_data(const char *node_id)
     }
 }
 // ==================== Task RX nhận dữ liệu từ Node =================
-void task_rx(void *pvParameters)
+// void task_rx(void *pvParameters)
+// {
+//     ESP_LOGI(pcTaskGetName(NULL), "Start RX");
+//     uint8_t buf[256];
+
+//     while (1)
+//     {
+//         int rxLen = uart_read_bytes(UART_NUM_1,
+//                                     buf,
+//                                     sizeof(buf) - 1,
+//                                     pdMS_TO_TICKS(10000)); // 10s timeout
+
+//         if (rxLen > 0)
+//         {
+//             buf[rxLen] = '\0';
+//             ESP_LOGI(pcTaskGetName(NULL), "RX(%d): %s", rxLen, buf);
+
+//             // 1) Node xin gửi dữ liệu: "SEND|0001"
+//             if (strncmp((char *)buf, "SEND|", 5) == 0)
+//             {
+//                 char node_id[8] = {0};
+
+//                 // ví dụ buffer: "SEND|0001\r\n"
+//                 if (sscanf((char*)buf, "SEND|%7s", node_id) == 1)
+//                 {
+//                     int idx = find_node_index_by_id(node_id);
+//                     if (idx >= 0)
+//                     {
+//                         ESP_LOGI(pcTaskGetName(NULL),
+//                                  "Node %s request SEND (idx=%d)", node_id, idx);
+//                         // trả lời OK, cho phép node gửi DATA
+//                         send_ok_for_send_req(node_id);
+//                     }
+//                     else
+//                     {
+//                         ESP_LOGW(pcTaskGetName(NULL),
+//                                  "SEND from unknown node_id: %s", node_id);
+//                         // có thể gửi ERR|id nếu muốn
+//                     }
+//                 }
+//                 else
+//                 {
+//                     ESP_LOGW(pcTaskGetName(NULL),
+//                              "Parse SEND error: %s", buf);
+//                 }
+//             }
+//             // 2) Node gửi dữ liệu: "DATA|<id>|Hum: xx.x Tmp: yy.y"
+//             else if (strncmp((char *)buf, "DATA|", 5) == 0)
+//             {
+//                 char node_id[8] = {0};
+//                 float h, t;
+
+//                 int matched = sscanf((char*)buf,
+//                                      "DATA|%7[^|]|Hum: %f Tmp: %f",
+//                                      node_id, &h, &t);
+//                 if (matched == 3)
+//                 {
+//                     int idx = find_node_index_by_id(node_id);
+//                     if (idx >= 0)
+//                     {
+//                         g_node_humd[idx] = h;
+//                         g_node_temp[idx] = t;
+
+//                         ESP_LOGI(pcTaskGetName(NULL),
+//                                  "Node %s (idx=%d): Hum=%.1f Tmp=%.1f",
+//                                  node_id, idx, h, t);
+
+//                         // gửi ACK cho DATA (để node biết đã nhận)
+//                         send_ack_for_data(node_id);
+//                     }
+//                     else
+//                     {
+//                         ESP_LOGW(pcTaskGetName(NULL),
+//                                  "DATA from unknown node_id: %s", node_id);
+//                     }
+//                 }
+//                 else
+//                 {
+//                     ESP_LOGW(pcTaskGetName(NULL),
+//                              "Parse DATA error: %s", buf);
+//                 }
+//             }
+//             // 3) Loại gói khác (sau này thêm nếu cần)
+//             else
+//             {
+//                 ESP_LOGW(pcTaskGetName(NULL),
+//                          "Unknown packet: %s", buf);
+//             }
+//         }
+//         else
+//         {
+//             // không nhận được gì trong 10s, chỉ log chơi
+//             ESP_LOGD(pcTaskGetName(NULL), "No data for 10s");
+//         }
+//     }
+// }
+static void handle_one_line(char *buf)
 {
-    ESP_LOGI(pcTaskGetName(NULL), "Start RX");
-    uint8_t buf[256];
-
-    while (1)
+    // 1) Node xin gửi dữ liệu: "SEND|0001"
+    if (strncmp(buf, "SEND|", 5) == 0)
     {
-        int rxLen = uart_read_bytes(UART_NUM_1,
-                                    buf,
-                                    sizeof(buf) - 1,
-                                    pdMS_TO_TICKS(10000)); // 10s timeout
+        char node_id[8] = {0};
 
-        if (rxLen > 0)
+        // ví dụ buffer: "SEND|0001\r\n"
+        if (sscanf(buf, "SEND|%7s", node_id) == 1)
         {
-            buf[rxLen] = '\0';
-            ESP_LOGI(pcTaskGetName(NULL), "RX(%d): %s", rxLen, buf);
-
-            // 1) Node xin gửi dữ liệu: "SEND|0001"
-            if (strncmp((char *)buf, "SEND|", 5) == 0)
+            int idx = find_node_index_by_id(node_id);
+            if (idx >= 0)
             {
-                char node_id[8] = {0};
+                ESP_LOGI(pcTaskGetName(NULL),
+                         "Node %s request SEND (idx=%d)", node_id, idx);
 
-                // ví dụ buffer: "SEND|0001\r\n"
-                if (sscanf((char*)buf, "SEND|%7s", node_id) == 1)
-                {
-                    int idx = find_node_index_by_id(node_id);
-                    if (idx >= 0)
-                    {
-                        ESP_LOGI(pcTaskGetName(NULL),
-                                 "Node %s request SEND (idx=%d)", node_id, idx);
-                        // trả lời OK, cho phép node gửi DATA
-                        send_ok_for_send_req(node_id);
-                    }
-                    else
-                    {
-                        ESP_LOGW(pcTaskGetName(NULL),
-                                 "SEND from unknown node_id: %s", node_id);
-                        // có thể gửi ERR|id nếu muốn
-                    }
-                }
-                else
-                {
-                    ESP_LOGW(pcTaskGetName(NULL),
-                             "Parse SEND error: %s", buf);
-                }
+                // trả lời OK, cho phép node gửi DATA
+                send_ok_for_send_req(node_id);
             }
-            // 2) Node gửi dữ liệu: "DATA|<id>|Hum: xx.x Tmp: yy.y"
-            else if (strncmp((char *)buf, "DATA|", 5) == 0)
-            {
-                char node_id[8] = {0};
-                float h, t;
-
-                int matched = sscanf((char*)buf,
-                                     "DATA|%7[^|]|Hum: %f Tmp: %f",
-                                     node_id, &h, &t);
-                if (matched == 3)
-                {
-                    int idx = find_node_index_by_id(node_id);
-                    if (idx >= 0)
-                    {
-                        g_node_humd[idx] = h;
-                        g_node_temp[idx] = t;
-
-                        ESP_LOGI(pcTaskGetName(NULL),
-                                 "Node %s (idx=%d): Hum=%.1f Tmp=%.1f",
-                                 node_id, idx, h, t);
-
-                        // gửi ACK cho DATA (để node biết đã nhận)
-                        send_ack_for_data(node_id);
-                    }
-                    else
-                    {
-                        ESP_LOGW(pcTaskGetName(NULL),
-                                 "DATA from unknown node_id: %s", node_id);
-                    }
-                }
-                else
-                {
-                    ESP_LOGW(pcTaskGetName(NULL),
-                             "Parse DATA error: %s", buf);
-                }
-            }
-            // 3) Loại gói khác (sau này thêm nếu cần)
             else
             {
                 ESP_LOGW(pcTaskGetName(NULL),
-                         "Unknown packet: %s", buf);
+                         "SEND from unknown node_id: %s", node_id);
+                // nếu thích có thể gửi ERR|id ở đây
+            }
+        }
+        else
+        {
+            ESP_LOGW(pcTaskGetName(NULL),
+                     "Parse SEND error: %s", buf);
+        }
+    }
+    // 2) Node gửi dữ liệu: "DATA|<id>|Hum: xx.x Tmp: yy.y"
+    else if (strncmp(buf, "DATA|", 5) == 0)
+    {
+        char node_id[8] = {0};
+        float h, t;
+
+        int matched = sscanf(buf,
+                             "DATA|%7[^|]|Hum: %f Tmp: %f",
+                             node_id, &h, &t);
+        if (matched == 3)
+        {
+            int idx = find_node_index_by_id(node_id);
+            if (idx >= 0)
+            {
+                g_node_humd[idx] = h;
+                g_node_temp[idx] = t;
+
+                ESP_LOGI(pcTaskGetName(NULL),
+                         "Node %s (idx=%d): Hum=%.1f Tmp=%.1f",
+                         node_id, idx, h, t);
+
+                // gửi ACK cho DATA (để node biết đã nhận)
+                send_ack_for_data(node_id);
+            }
+            else
+            {
+                ESP_LOGW(pcTaskGetName(NULL),
+                         "DATA from unknown node_id: %s", node_id);
+            }
+        }
+        else
+        {
+            ESP_LOGW(pcTaskGetName(NULL),
+                     "Parse DATA error: %s", buf);
+        }
+    }
+    // 3) Loại gói khác
+    else
+    {
+        ESP_LOGW(pcTaskGetName(NULL),
+                 "Unknown packet: %s", buf);
+    }
+}
+void task_rx(void *pvParameters)
+{
+    ESP_LOGI(pcTaskGetName(NULL), "Start RX");
+
+    static char line_buf[256];
+    static int  line_idx = 0;
+
+    uint8_t tmp[64];
+
+    while (1)
+    {
+        // đọc 1 mẻ byte từ UART (có thể là 1 byte, 10 byte, 50 byte...)
+        int rxLen = uart_read_bytes(UART_NUM_1,
+                                    tmp,
+                                    sizeof(tmp),
+                                    pdMS_TO_TICKS(10000)); // 10s timeout
+        if (rxLen > 0) {
+        tmp[rxLen] = '\0';  // THÊM DÒNG NÀY
+        printf("String received : %s  Length : %d\r\n", tmp, rxLen);
+    }
+    else {
+        printf("String received : <none>  Length : %d\r\n", rxLen);
+    }
+        if (rxLen > 0)
+        {
+            for (int i = 0; i < rxLen; i++)
+            {
+                char c = (char)tmp[i];
+
+                // tránh tràn line_buf
+                if (line_idx < (int)sizeof(line_buf) - 1)
+                {
+                    line_buf[line_idx++] = c;
+                }
+
+                // gặp '\n' => kết thúc 1 dòng / 1 packet
+                if (c == '\n')
+                {
+                    line_buf[line_idx] = '\0'; // đóng chuỗi
+
+                    ESP_LOGI(pcTaskGetName(NULL),
+                             "RX line (%d): %s", line_idx, line_buf);
+
+                    handle_one_line(line_buf);  // xử lý SEND / DATA
+
+                    line_idx = 0; // reset cho dòng tiếp theo
+                }
+            }
+
+            // nếu bị tràn buffer mà chưa thấy '\n' => drop
+            if (line_idx >= (int)sizeof(line_buf) - 1)
+            {
+                ESP_LOGW(pcTaskGetName(NULL),
+                         "Line too long, drop");
+                line_idx = 0;
             }
         }
         else
@@ -239,7 +378,7 @@ void task_rx(void *pvParameters)
 //         // Read data from the UART
 //         int len = uart_read_bytes(UART_NUM_1, data, (BUF_SIZE - 1), 20 / portTICK_PERIOD_MS);
 //         // Write data back to the UART
-//         uart_write_bytes(UART_NUM_1, (const char *) data, len);
+//         // uart_write_bytes(UART_NUM_1, (const char *) data, len);
 //         if (len) {
 //             data[len] = '\0';
 //             ESP_LOGI(TAG, "Recv str: %s", (char *) data);
@@ -253,7 +392,7 @@ void task_rx(void *pvParameters)
 //     while (1) {
 //         uart_write_bytes(UART_NUM_1, msg, strlen(msg));
 //         ESP_LOGI(TAG, "Sent: Hello");
-//         vTaskDelay(pdMS_TO_TICKS(5000));   // gửi mỗi 2 giây
+//         vTaskDelay(pdMS_TO_TICKS(7000));   // gửi mỗi 2 giây
 //     }
 // }
 void app_main(void)
@@ -278,4 +417,5 @@ void app_main(void)
     ESP_ERROR_CHECK(uart_set_pin(UART_NUM_1, 17, 16, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
     // xTaskCreate(echo_task, "uart_echo_task", 4096, NULL, 10, NULL);
     // xTaskCreate(uart_write_task, "uart_write_task", 4096, NULL,  13, NULL);
+    xTaskCreate(task_rx, "task_rx", 4096, NULL, 12, NULL);
 }
