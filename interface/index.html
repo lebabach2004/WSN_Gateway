@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <title>Hệ thống giám sát nhiệt độ độ ẩm</title>
+    <style>
+        :root{
+            --primary:#2563eb;
+            --primary-soft:#dbeafe;
+            --bg:#e5e7eb;
+            --card-bg:#ffffff;
+            --border:#d1d5db;
+            --text:#111827;
+            --muted:#6b7280;
+            --danger:#ef4444;
+            --success:#16a34a;
+        }
+
+        *{
+            box-sizing:border-box;
+            font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+        }
+
+        body{
+            margin:0;
+            padding:24px;
+            background:linear-gradient(180deg,#f9fafb,#e5e7eb);
+            color:var(--text);
+        }
+
+        h1{
+            text-align:center;
+            margin-bottom:24px;
+            font-size:24px;
+        }
+
+        .nodes{
+            display:grid;
+            grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+            gap:20px;
+            max-width:1000px;
+            margin:0 auto;
+        }
+
+        .node-card{
+            background:var(--card-bg);
+            border:1px solid var(--border);
+            border-radius:14px;
+            padding:16px 18px;
+            position:relative;
+            box-shadow:0 10px 30px rgba(15,23,42,.08);
+            overflow:hidden;
+            transition:border .15s, box-shadow .15s, transform .15s;
+        }
+
+        .node-header{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin-bottom:12px;
+        }
+
+        .node-title{
+            font-size:17px;
+            font-weight:600;
+        }
+
+        .node-id-badge{
+            font-size:11px;
+            padding:2px 8px;
+            border-radius:999px;
+            background:#eff6ff;
+            border:1px solid #bfdbfe;
+            color:#1d4ed8;
+        }
+
+        .section-title{
+            font-weight:600;
+            margin:10px 0 6px;
+            font-size:13px;
+            color:var(--muted);
+            text-transform:uppercase;
+            letter-spacing:.06em;
+        }
+
+        .value-row{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            margin:4px 0;
+            gap:8px;
+            font-size:14px;
+        }
+
+        .value-label{
+            color:var(--muted);
+            min-width:130px;
+        }
+
+        .value-box{
+            flex:1;
+            display:flex;
+            align-items:center;
+            justify-content:flex-start;
+            gap:6px;
+            padding:6px 10px;
+            border-radius:10px;
+            background:#f3f4f6;
+            border:1px solid #e5e7eb;
+            text-align:right;
+        }
+
+        .value-box .icon{
+            font-size:16px;
+        }
+
+        .value-box .value{
+            margin-left:auto;
+        }
+
+        .slider-group{
+            margin:6px 0 12px;
+        }
+
+        .slider-group label{
+            display:flex;
+            justify-content:space-between;
+            font-size:13px;
+            margin-bottom:4px;
+            color:var(--muted);
+        }
+
+        .slider-group input[type="range"]{
+            width:100%;
+            accent-color:var(--primary);
+        }
+
+        .apply-row{
+            display:flex;
+            align-items:center;
+            gap:8px;
+            margin-top:8px;
+        }
+
+        .apply-btn{
+            padding:6px 14px;
+            border-radius:999px;
+            border:1px solid var(--primary);
+            background:var(--primary);
+            color:white;
+            cursor:pointer;
+            font-size:13px;
+            font-weight:500;
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            transition:transform .08s,box-shadow .12s,background .12s,border-color .12s;
+            box-shadow:0 4px 14px rgba(37,99,235,.3);
+        }
+
+        .apply-btn span.icon{
+            font-size:14px;
+        }
+
+        .apply-btn:hover{
+            background:#1d4ed8;
+            border-color:#1d4ed8;
+            transform:translateY(-1px);
+            box-shadow:0 8px 20px rgba(37,99,235,.4);
+        }
+
+        .apply-btn:active{
+            transform:translateY(0);
+            box-shadow:0 4px 10px rgba(37,99,235,.3);
+        }
+
+        .status-pill{
+            min-width:120px;
+            padding:4px 8px;
+            border-radius:999px;
+            background:#f3f4f6;
+            border:1px solid #e5e7eb;
+            display:flex;
+            align-items:center;
+            gap:5px;
+            font-size:11px;
+            color:var(--muted);
+            white-space:nowrap;
+        }
+
+        .status-pill.ok{
+            border-color:rgba(22,163,74,.7);
+            color:var(--success);
+            background:#ecfdf3;
+        }
+        .status-pill.error{
+            border-color:rgba(239,68,68,.7);
+            color:var(--danger);
+            background:#fee2e2;
+        }
+        .status-pill.loading{
+            border-color:rgba(37,99,235,.7);
+            color:var(--primary);
+            background:#e0edff;
+        }
+
+        .status-pill.hidden{
+            opacity:0;
+            visibility:hidden;
+        }
+
+        .status-pill.visible{
+            opacity:1;
+            visibility:visible;
+        }
+
+        .node-card.ok{
+            border:2px solid #22c55e;
+            box-shadow:0 0 0 2px rgba(34,197,94,.2);
+        }
+
+        .node-card.warn{
+            border:2px solid #ef4444;
+            box-shadow:0 0 0 2px rgba(239,68,68,.25);
+            animation: warnBlink 1s infinite alternate;
+        }
+
+        @keyframes warnBlink{
+            from { transform:scale(1); }
+            to   { transform:scale(1.01); }
+        }
+
+        .node-status-badge{
+            font-size:11px;
+            padding:3px 10px;
+            border-radius:999px;
+            font-weight:600;
+        }
+
+        .node-status-badge.ok{
+            background:#dcfce7;
+            color:#166534;
+        }
+
+        .node-status-badge.warn{
+            background:#fee2e2;
+            color:#991b1b;
+        }
+        .node-status-badge.loading {
+            background:#e5e7eb;
+            color:#6b7280;
+        }
+
+        .node-card.loading {
+            border:1px dashed #9ca3af;
+        }
+    </style>
+</head>
+<body>
+<h1>Hệ thống giám sát nhiệt độ &amp; độ ẩm</h1>
+
+<div class="nodes">
+    <!-- NODE 1 -->
+    <div class="node-card loading" data-node-id="0001">
+        <div class="node-header">
+            <div class="node-title">Node 1</div>
+            <div style="display:flex;gap:6px;align-items:center;">
+                <div class="node-id-badge">ID: 0001</div>
+                <div class="node-status-badge loading">ĐANG TẢI ...</div>
+            </div>
+        </div>
+
+        <div class="current-values">
+            <div class="section-title">Giá trị hiện tại</div>
+
+            <div class="value-row">
+                <span class="value-label">Nhiệt độ</span>
+                <div class="value-box temp-box">
+                    <span class="icon">🌡</span>
+                    <span class="value"><span class="temp-value">--</span> °C</span>
+                </div>
+            </div>
+
+            <div class="value-row">
+                <span class="value-label">Độ ẩm không khí</span>
+                <div class="value-box hum-box">
+                    <span class="icon">💧</span>
+                    <span class="value"><span class="hum-value">--</span> %</span>
+                </div>
+            </div>
+
+            <div class="value-row">
+                <span class="value-label">Độ ẩm đất</span>
+                <div class="value-box soil-box">
+                    <span class="icon">🌱</span>
+                    <span class="value"><span class="soil-value">--</span> %</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="thresholds">
+            <div class="section-title">Cài đặt ngưỡng</div>
+
+            <div class="slider-group">
+                <label>
+                    Ngưỡng nhiệt độ
+                    <span><span class="temp-threshold-display">--</span> °C</span>
+                </label>
+                <input type="range" min="0" max="60" value="0"
+                       class="threshold-slider temp-threshold">
+            </div>
+
+            <div class="slider-group">
+                <label>
+                    Ngưỡng độ ẩm không khí
+                    <span><span class="hum-threshold-display">--</span> %</span>
+                </label>
+                <input type="range" min="0" max="100" value="0"
+                       class="threshold-slider hum-threshold">
+            </div>
+
+            <div class="slider-group">
+                <label>
+                    Ngưỡng độ ẩm đất
+                    <span><span class="soil-threshold-display">--</span> %</span>
+                </label>
+                <input type="range" min="0" max="100" value="0"
+                       class="threshold-slider soil-threshold">
+            </div>
+
+            <div class="apply-row">
+                <button class="apply-btn">
+                    <span class="icon">⚙</span>
+                    <span>Áp dụng</span>
+                </button>
+                <div class="status-pill hidden">
+                    <span class="status-icon">⏳</span>
+                    <span class="status-text">Đang gửi…</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NODE 2 -->
+    <div class="node-card loading" data-node-id="0002">
+        <div class="node-header">
+            <div class="node-title">Node 2</div>
+            <div style="display:flex;gap:6px;align-items:center;">
+                <div class="node-id-badge">ID: 0002</div>
+                <div class="node-status-badge loading">ĐANG TẢI ...</div>
+            </div>
+        </div>
+
+        <div class="current-values">
+            <div class="section-title">Giá trị hiện tại</div>
+
+            <div class="value-row">
+                <span class="value-label">Nhiệt độ</span>
+                <div class="value-box temp-box">
+                    <span class="icon">🌡</span>
+                    <span class="value"><span class="temp-value">--</span> °C</span>
+                </div>
+            </div>
+
+            <div class="value-row">
+                <span class="value-label">Độ ẩm không khí</span>
+                <div class="value-box hum-box">
+                    <span class="icon">💧</span>
+                    <span class="value"><span class="hum-value">--</span> %</span>
+                </div>
+            </div>
+
+            <div class="value-row">
+                <span class="value-label">Độ ẩm đất</span>
+                <div class="value-box soil-box">
+                    <span class="icon">🌱</span>
+                    <span class="value"><span class="soil-value">--</span> %</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="thresholds">
+            <div class="section-title">Cài đặt ngưỡng</div>
+
+            <div class="slider-group">
+                <label>
+                    Ngưỡng nhiệt độ
+                    <span><span class="temp-threshold-display">--</span> °C</span>
+                </label>
+                <input type="range" min="0" max="60" value="0"
+                       class="threshold-slider temp-threshold">
+            </div>
+
+            <div class="slider-group">
+                <label>
+                    Ngưỡng độ ẩm không khí
+                    <span><span class="hum-threshold-display">--</span> %</span>
+                </label>
+                <input type="range" min="0" max="100" value="0"
+                       class="threshold-slider hum-threshold">
+            </div>
+
+            <div class="slider-group">
+                <label>
+                    Ngưỡng độ ẩm đất
+                    <span><span class="soil-threshold-display">--</span> %</span>
+                </label>
+                <input type="range" min="0" max="100" value="0"
+                       class="threshold-slider soil-threshold">
+            </div>
+
+            <div class="apply-row">
+                <button class="apply-btn">
+                    <span class="icon">⚙</span>
+                    <span>Áp dụng</span>
+                </button>
+                <div class="status-pill hidden">
+                    <span class="status-icon">⏳</span>
+                    <span class="status-text">Đang gửi…</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // API trên ESP32 (vì HTML được serve từ ESP nên dùng path tương đối)
+    const DATA_URL   = "/data";   // GET -> ESP32 trả JSON mảng node
+    const CONFIG_URL = "/config"; // POST -> ESP32 nhận JSON config
+
+    // Bind slider hiển thị giá trị
+    document.querySelectorAll(".node-card").forEach(card => {
+        const tempSlider = card.querySelector(".temp-threshold");
+        const humSlider  = card.querySelector(".hum-threshold");
+        const soilSlider = card.querySelector(".soil-threshold");
+
+        const tempDisplay = card.querySelector(".temp-threshold-display");
+        const humDisplay  = card.querySelector(".hum-threshold-display");
+        const soilDisplay = card.querySelector(".soil-threshold-display");
+
+        function bindSlider(slider, display) {
+            slider.addEventListener("input", () => {
+                display.textContent = slider.value;
+            });
+        }
+
+        bindSlider(tempSlider, tempDisplay);
+        bindSlider(humSlider, humDisplay);
+        bindSlider(soilSlider, soilDisplay);
+    });
+
+    // Cập nhật UI từ 1 object JSON của node
+    // obj: { id, type, temp, hum, soil }
+    function updateNodeCardFromJson(obj){
+        const card = document.querySelector(`.node-card[data-node-id="${obj.id}"]`);
+        if (!card) return;
+
+        const tempEl = card.querySelector(".temp-value");
+        const humEl  = card.querySelector(".hum-value");
+        const soilEl = card.querySelector(".soil-value");
+
+        const tempTh = Number(card.querySelector(".temp-threshold").value);
+        const humTh  = Number(card.querySelector(".hum-threshold").value);
+        const soilTh = Number(card.querySelector(".soil-threshold").value);
+
+        let isWarn = false;
+
+        // Ép Number để xử lý float từ ESP32 (10.00000, 20.00000,...)
+        if (obj.temp !== undefined){
+            const v = Number(obj.temp);
+            if (!Number.isNaN(v)) {
+                tempEl.textContent = v.toFixed(1);
+                if (v > tempTh) isWarn = true;
+            }
+        }
+
+        if (obj.hum !== undefined){
+            const v = Number(obj.hum);
+            if (!Number.isNaN(v)) {
+                humEl.textContent = v.toFixed(1);
+                if (v > humTh) isWarn = true;
+            }
+        }
+
+        if (obj.soil !== undefined){
+            const v = Number(obj.soil);
+            if (!Number.isNaN(v)) {
+                soilEl.textContent = v.toFixed(1);
+                if (v > soilTh) isWarn = true;
+            }
+        }
+
+        const badge = card.querySelector(".node-status-badge");
+        card.classList.remove("ok","warn","loading");
+        badge.classList.remove("ok","warn","loading");
+        if (isWarn){
+            card.classList.add("warn");
+            card.classList.remove("ok");
+            badge.classList.add("warn");
+            badge.classList.remove("ok");
+            badge.textContent = "CẢNH BÁO";
+        } else {
+            card.classList.add("ok");
+            card.classList.remove("warn");
+            badge.classList.add("ok");
+            badge.classList.remove("warn");
+            badge.textContent = "BÌNH THƯỜNG";
+        }
+    }
+    async function fetchThresholdsFromEsp() {
+        try {
+            const res = await fetch("/thresholds", { cache: "no-cache" });
+            if (!res.ok) {
+                console.error("HTTP lỗi /thresholds:", res.status, res.statusText);
+                return;
+            }
+
+            // Đọc dạng text thay vì res.json() để tránh rác / \0
+            let raw = await res.text();
+            console.log("RAW /thresholds =", JSON.stringify(raw));
+
+            // Tìm mảng JSON đầu tiên: từ '[' đến ']'
+            const start = raw.indexOf('[');
+            const end   = raw.lastIndexOf(']');
+
+            if (start === -1 || end === -1 || end <= start) {
+                console.error("Không tìm được mảng JSON hợp lệ trong /thresholds");
+                return;
+            }
+
+            const jsonStr = raw.slice(start, end + 1);
+            console.log("JSON /thresholds cắt ra =", jsonStr);
+
+            let data;
+            try {
+                data = JSON.parse(jsonStr);
+            } catch (e) {
+                console.error("JSON.parse(/thresholds) LỖI:", e);
+                return;
+            }
+
+            if (!Array.isArray(data)) {
+                console.error("/thresholds không phải mảng:", data);
+                return;
+            }
+
+            data.forEach(obj => {
+                if (!obj || !obj.id) return;
+
+                const card = document.querySelector(`.node-card[data-node-id="${obj.id}"]`);
+                if (!card) return;
+
+                const tempSlider = card.querySelector(".temp-threshold");
+                const humSlider  = card.querySelector(".hum-threshold");
+                const soilSlider = card.querySelector(".soil-threshold");
+
+                const tempDisp = card.querySelector(".temp-threshold-display");
+                const humDisp  = card.querySelector(".hum-threshold-display");
+                const soilDisp = card.querySelector(".soil-threshold-display");
+
+                if (tempSlider && obj.temp_th !== undefined) {
+                    tempSlider.value = obj.temp_th;
+                    if (tempDisp) tempDisp.textContent = obj.temp_th;
+                }
+                if (humSlider && obj.hum_th !== undefined) {
+                    humSlider.value = obj.hum_th;
+                    if (humDisp) humDisp.textContent = obj.hum_th;
+                }
+                if (soilSlider && obj.soil_th !== undefined) {
+                    soilSlider.value = obj.soil_th;
+                    if (soilDisp) soilDisp.textContent = obj.soil_th;
+                }
+            });
+
+        } catch (e) {
+            console.error("Lỗi fetch /thresholds:", e);
+        }
+    }
+
+    // Lấy JSON từ ESP32
+    async function fetchDataFromEsp(){
+    try{
+        const res = await fetch(DATA_URL, { cache: "no-cache" });
+        if (!res.ok) {
+            console.error("HTTP lỗi /data:", res.status, res.statusText);
+            return;
+        }
+
+        // Đọc dạng text để thấy toàn bộ response
+        let raw = await res.text();
+        console.log("RAW /data =", JSON.stringify(raw));
+
+        // Tìm mảng JSON đầu tiên: từ '[' đến ']'
+        const start = raw.indexOf('[');
+        const end   = raw.lastIndexOf(']');
+
+        if (start === -1 || end === -1 || end <= start) {
+            console.error("Không tìm được mảng JSON hợp lệ trong /data");
+            return;
+        }
+
+        const jsonStr = raw.slice(start, end + 1);
+        console.log("JSON cắt ra =", jsonStr);
+
+        let data;
+        try {
+            data = JSON.parse(jsonStr);
+        } catch (e) {
+            console.error("JSON.parse(jsonStr) LỖI:", e);
+            return;
+        }
+
+        if (!Array.isArray(data)) {
+            console.error("Kết quả parse KHÔNG PHẢI MẢNG:", data);
+            return;
+        }
+
+        data.forEach(obj => {
+            if (obj && obj.id) {
+                updateNodeCardFromJson(obj);
+            }
+        });
+
+    } catch(e){
+        console.error("Lỗi fetch /data:", e);
+    }
+}
+
+    // Gọi ngay + update mỗi 60 giây
+    (async function init() {
+    await fetchThresholdsFromEsp();   // chờ xong /thresholds
+    await fetchDataFromEsp();         // rồi mới gọi /data
+    setInterval(fetchDataFromEsp, 60000); // sau đó 60s update 1 lần
+    })();
+
+    // Gửi config dạng JSON xuống ESP32 (giữ nguyên format bạn đang parse)
+    document.querySelectorAll(".node-card").forEach(card => {
+        const btn    = card.querySelector(".apply-btn");
+        const pill   = card.querySelector(".status-pill");
+        const icon   = pill.querySelector(".status-icon");
+        const textEl = pill.querySelector(".status-text");
+        const nodeId = card.getAttribute("data-node-id");
+
+        let hideTimeout;
+
+        function setStatus(state, message, symbol){
+            pill.classList.remove("ok","error","loading","hidden");
+            pill.classList.add("visible", state);
+            textEl.textContent = message;
+            icon.textContent = symbol;
+            clearTimeout(hideTimeout);
+            if(state === "ok" || state === "error"){
+                hideTimeout = setTimeout(()=>{
+                    pill.classList.remove("visible");
+                    pill.classList.add("hidden");
+                }, 3000);
+            }
+        }
+
+        btn.addEventListener("click", async () => {
+            const tempThreshold = Number(card.querySelector(".temp-threshold").value);
+            const humThreshold  = Number(card.querySelector(".hum-threshold").value);
+            const soilThreshold = Number(card.querySelector(".soil-threshold").value);
+
+            const payload = {
+                id: nodeId,
+                type: "config",
+                temp: tempThreshold,
+                hum:  humThreshold,
+                soil: soilThreshold
+            };
+            setStatus("loading","Đang gửi…","⏳");
+            try{
+                const res = await fetch(CONFIG_URL,{
+                    method:"POST",
+                    headers:{"Content-Type":"application/json"},
+                    body:JSON.stringify(payload)
+                });
+
+                if(res.ok){
+                    setStatus("ok","Đã áp dụng","✔");
+                    fetchDataFromEsp(); 
+                }else{
+                    setStatus("error","ESP trả lỗi","✖");
+                }
+            }catch(e){
+                console.error("Lỗi gửi config:", e);
+                setStatus("error","Lỗi gửi","✖");
+            }
+        });
+    });
+</script>
+</body>
+</html>
