@@ -123,17 +123,20 @@ void process_cfg_request(char *node_id, int idx){
     }
     char msg[64];
     if(!is_new){
-        int n = snprintf(msg, sizeof(msg), "NOCHANGEDATA|%s\r\n", node_id);
+        int n = snprintf(msg, sizeof(msg), "NO|%s\r\n", node_id);
         if (n > 0) lora_uart_send((uint8_t*)msg, (size_t)n);
         ESP_LOGI(TAG_LORA, "No change for %s, sent NOCHANGEDATA", node_id);
     }
     else{
-        int n=snprintf(msg, sizeof(msg), "CFG|%s|TempTh:%.1f|HumTh:%.1f|SoilTh:%.1f\r\n",
-                       node_id, t_high, h_high, s_high);
+        // int n=snprintf(msg, sizeof(msg), "CFG|%s|TempTh: %.1f HumTh: %.1f SoilTh: %.1f\r\n",
+        //                node_id, t_high, h_high, s_high);
+        int n=snprintf(msg, sizeof(msg), "CFG|%s|TempTh: %.1f HumTh: %.1f\r\n",
+                        node_id, t_high, h_high);
         if (n>0 && n < (int)sizeof(msg)){
             lora_uart_send((uint8_t*)msg, (size_t)n);
-            ESP_LOGI(TAG_LORA, "Sent CONFIG to %s: TempTh=%.1f HumTh=%.1f SoilTh=%.1f",
-                     node_id, t_high, h_high, s_high);
+            // ESP_LOGI(TAG_LORA, "Sent CONFIG to %s: TempTh=%.1f HumTh=%.1f SoilTh=%.1f",
+            //          node_id, t_high, h_high, s_high);
+            ESP_LOGI(TAG_LORA, "Sent CONFIG to %s: TempTh=%.1f HumTh=%.1f",node_id, t_high, h_high);
             g_saved_thresholds[idx].intialized = true;
             g_saved_thresholds[idx].temperature_config = t_high;
             g_saved_thresholds[idx].humidity_config    = h_high;
@@ -193,9 +196,9 @@ static void handle_one_line(char *buf)
                      "Parse DATA error: %s", buf);
         }
     }
-    else if(strncmp(buf, "CONFIG|", 7) == 0){
+    else if(strncmp(buf, "CONFIG?|", 7) == 0){
         char node_id[8]={0};
-        if(sscanf(buf, "CONFIG|%7s", node_id) == 1){
+        if(sscanf(buf, "CONFIG?|%7s", node_id) == 1){
             int idx = find_node_index_by_id(node_id);
             if (idx >= 0){
                 process_cfg_request(node_id, idx);
@@ -225,7 +228,7 @@ void task_rx(void *pvParameters)
     while (1)
     {
         // đọc 1 mẻ byte từ UART (có thể là 1 byte, 10 byte, 50 byte...)
-        int rxLen = uart_read_bytes(UART_NUM_1, tmp, sizeof(tmp), pdMS_TO_TICKS(100)); // 10s timeout
+        int rxLen = uart_read_bytes(UART_NUM_1, tmp, sizeof(tmp), pdMS_TO_TICKS(30)); // 10s timeout
         if (rxLen > 0)
         {
             for (int i = 0; i < rxLen; i++)
