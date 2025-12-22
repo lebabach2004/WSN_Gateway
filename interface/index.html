@@ -328,6 +328,18 @@
                        class="threshold-slider soil-threshold">
             </div>
 
+            <div class="value-row" style="margin-top:12px;">
+                <span class="value-label">Chu kỳ wake-up</span>
+                <div class="value-box">
+                    <input type="number"
+                        class="period-input"
+                        min="10"
+                        step="1"
+                        value="40">
+                    <span>giây</span>
+                </div>
+            </div>
+            
             <div class="apply-row">
                 <button class="apply-btn">
                     <span class="icon">⚙</span>
@@ -407,6 +419,18 @@
                 </label>
                 <input type="range" min="0" max="100" value="0"
                        class="threshold-slider soil-threshold">
+            </div>
+
+            <div class="value-row" style="margin-top:12px;">
+                <span class="value-label">Chu kỳ wake-up</span>
+                <div class="value-box">
+                    <input type="number"
+                        class="period-input"
+                        min="10"
+                        step="1"
+                        value="40">
+                    <span>giây</span>
+                </div>
             </div>
 
             <div class="apply-row">
@@ -570,6 +594,10 @@
                     soilSlider.value = obj.soil_th;
                     if (soilDisp) soilDisp.textContent = obj.soil_th;
                 }
+                const periodInput = card.querySelector(".period-input");
+                if (periodInput && obj.period_sec !== undefined) {
+                    periodInput.value = obj.period_sec;
+                }
             });
 
         } catch (e) {
@@ -661,13 +689,15 @@
             const tempThreshold = Number(card.querySelector(".temp-threshold").value);
             const humThreshold  = Number(card.querySelector(".hum-threshold").value);
             const soilThreshold = Number(card.querySelector(".soil-threshold").value);
+            const periodSec = Number(card.querySelector(".period-input").value);
 
             const payload = {
                 id: nodeId,
                 type: "config",
                 temp: tempThreshold,
                 hum:  humThreshold,
-                soil: soilThreshold
+                soil: soilThreshold,
+                period_sec: periodSec
             };
             setStatus("loading","Đang gửi…","⏳");
             try{

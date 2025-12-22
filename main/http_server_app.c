@@ -31,8 +31,8 @@ static node_info_t g_nodes[MAX_NODES] = {
     { "0002", 40, 50, 30},
 };
 node_threshold_t g_thresholds[MAX_NODES] = {
-    { "0001", 30, 50, 70 },
-    { "0002", 30, 50, 70 },
+    { "0001", 30, 50, 70, 40 },
+    { "0002", 30, 50, 70, 40 },
 };
 static esp_err_t save_node_to_flash(void){
     nvs_handle_t nvs;
@@ -101,7 +101,7 @@ static int generate_data_json(char *buffer, size_t buf_size){
     json_gen_end_array(&jstr);
     return json_gen_str_end(&jstr); 
 }
-static esp_err_t parse_config_from_req(char *buf, int len, char *id, float *temp, float *hum, float *soil)
+static esp_err_t parse_config_from_req(char *buf, int len, char *id, float *temp, float *hum, float *soil, int *period_sec)
 {
     jparse_ctx_t jctx;
     char type[16];
@@ -115,7 +115,8 @@ static esp_err_t parse_config_from_req(char *buf, int len, char *id, float *temp
     if( json_obj_get_string(&jctx, "id", id, 5 ) != OS_SUCCESS || 
         json_obj_get_float(&jctx, "temp",temp) != OS_SUCCESS ||
         json_obj_get_float(&jctx, "hum", hum) != OS_SUCCESS ||
-        json_obj_get_float(&jctx, "soil", soil) != OS_SUCCESS ) {
+        json_obj_get_float(&jctx, "soil", soil) != OS_SUCCESS ||
+        json_obj_get_int(&jctx, "period_sec", period_sec) != OS_SUCCESS ){
         json_parse_end(&jctx);
         return ESP_FAIL;
     }
@@ -172,7 +173,8 @@ static esp_err_t post_config_handler(httpd_req_t *req)
     printf("Received config: %s\n", buf);
     char id_config[5];
     float temp_config, hum_config, soil_config;
-    if (parse_config_from_req(buf, ret, id_config, &temp_config, &hum_config, &soil_config ) != ESP_OK) {
+    int period_sec_config;
+    if (parse_config_from_req(buf, ret, id_config, &temp_config, &hum_config, &soil_config,&period_sec_config ) != ESP_OK) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
         return ESP_FAIL;
     }
@@ -182,6 +184,7 @@ static esp_err_t post_config_handler(httpd_req_t *req)
             g_thresholds[i].temp_th = temp_config;
             g_thresholds[i].hum_th = hum_config;
             g_thresholds[i].soil_th = soil_config;
+            g_thresholds[i].period_sec = period_sec_config;
             save_node_to_flash();
             node_found = true;
             break;
@@ -211,6 +214,7 @@ static int generate_thresholds_json(char *buffer, size_t buf_size){
         json_gen_obj_set_float(&jstr, "temp_th", g_thresholds[i].temp_th);
         json_gen_obj_set_float(&jstr, "hum_th",  g_thresholds[i].hum_th);
         json_gen_obj_set_float(&jstr, "soil_th", g_thresholds[i].soil_th);
+        json_gen_obj_set_int(&jstr, "period_sec", g_thresholds[i].period_sec);
         json_gen_end_object(&jstr);
     }
 

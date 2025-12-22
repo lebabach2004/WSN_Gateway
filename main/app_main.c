@@ -55,6 +55,7 @@ typedef struct{
     float temperature_config;
     float humidity_config;
     float soil_config;
+    int period_sec;
 }node_threshold_cache_t;
 static node_threshold_cache_t g_saved_thresholds[2];
 
@@ -109,7 +110,8 @@ void process_cfg_request(char *node_id, int idx){
     }
     float t_high = g_thresholds[idx].temp_th;
     float h_high = g_thresholds[idx].hum_th ;
-    float s_high  = g_thresholds[idx].soil_th; ;
+    float s_high  = g_thresholds[idx].soil_th; 
+    int period = g_thresholds[idx].period_sec;
     bool is_new = false;
     if(!g_saved_thresholds[idx].intialized){
         is_new = true;
@@ -117,7 +119,8 @@ void process_cfg_request(char *node_id, int idx){
     else{
         if(g_saved_thresholds[idx].temperature_config != t_high ||
            g_saved_thresholds[idx].humidity_config    != h_high ||
-           g_saved_thresholds[idx].soil_config        != s_high){
+           g_saved_thresholds[idx].soil_config        != s_high || 
+           g_saved_thresholds[idx].period_sec         != period){
             is_new = true;
         }
     }
@@ -130,17 +133,18 @@ void process_cfg_request(char *node_id, int idx){
     else{
         // int n=snprintf(msg, sizeof(msg), "CFG|%s|TempTh: %.1f HumTh: %.1f SoilTh: %.1f\r\n",
         //                node_id, t_high, h_high, s_high);
-        int n=snprintf(msg, sizeof(msg), "CFG|%s|TempTh: %.1f HumTh: %.1f\r\n",
-                        node_id, t_high, h_high);
+        int n=snprintf(msg, sizeof(msg), "CFG|%s|TempTh: %.1f HumTh: %.1f Period: %d\r\n",
+                        node_id, t_high, h_high, period);
         if (n>0 && n < (int)sizeof(msg)){
             lora_uart_send((uint8_t*)msg, (size_t)n);
             // ESP_LOGI(TAG_LORA, "Sent CONFIG to %s: TempTh=%.1f HumTh=%.1f SoilTh=%.1f",
             //          node_id, t_high, h_high, s_high);
-            ESP_LOGI(TAG_LORA, "Sent CONFIG to %s: TempTh=%.1f HumTh=%.1f",node_id, t_high, h_high);
+            ESP_LOGI(TAG_LORA, "Sent CONFIG to %s: TempTh=%.1f HumTh=%.1f Period=%d",node_id, t_high, h_high, period);
             g_saved_thresholds[idx].intialized = true;
             g_saved_thresholds[idx].temperature_config = t_high;
             g_saved_thresholds[idx].humidity_config    = h_high;
             g_saved_thresholds[idx].soil_config        = s_high;
+            g_saved_thresholds[idx].period_sec         = period;
         }
         else{
             ESP_LOGW(TAG_LORA, "Failed to build CFG frame for %s", node_id);

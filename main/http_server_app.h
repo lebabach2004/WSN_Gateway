@@ -13,6 +13,7 @@ typedef struct {
     float temp_th;
     float hum_th;
     float soil_th;
+    int period_sec;
 } node_threshold_t;
 void start_webserver(void);
 void stop_webserver(void);
