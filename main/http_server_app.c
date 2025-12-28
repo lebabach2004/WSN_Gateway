@@ -26,13 +26,13 @@ static const char *TAG = "HTPP_SERVER_APP";
 
 #define MAX_NODES  2
 
-static node_info_t g_nodes[MAX_NODES] = {
+node_info_t g_nodes[MAX_NODES] = {
     { "0001", 10, 20, 30},
     { "0002", 40, 50, 30},
 };
 node_threshold_t g_thresholds[MAX_NODES] = {
-    { "0001", 30, 50, 70, 40 },
-    { "0002", 30, 50, 70, 40 },
+    { "0001", 30, 50, 30, 30 },
+    { "0002", 30, 50, 30, 30 },
 };
 static esp_err_t save_node_to_flash(void){
     nvs_handle_t nvs;

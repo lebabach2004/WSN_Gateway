@@ -46,9 +46,6 @@ SemaphoreHandle_t config_sem;          // có config mới
 
 // Dữ liệu 4 node
 static const char *g_node_ids[2] = { NODE1, NODE2 };
-static float g_node_temp[2] = {0};
-static float g_node_humd[2] = {0};
-static float g_node_soil[2] = {0};
 
 typedef struct{
     bool intialized;
@@ -60,6 +57,7 @@ typedef struct{
 static node_threshold_cache_t g_saved_thresholds[2];
 
 extern node_threshold_t g_thresholds[2];
+extern node_info_t g_nodes[2];
 // Semaphore for config message
 void lora_uart_send(const uint8_t *data, size_t len){
     if (xSemaphoreTake(lora_tx_mutex, pdMS_TO_TICKS(1000)) == pdTRUE){
@@ -133,8 +131,8 @@ void process_cfg_request(char *node_id, int idx){
     else{
         // int n=snprintf(msg, sizeof(msg), "CFG|%s|TempTh: %.1f HumTh: %.1f SoilTh: %.1f\r\n",
         //                node_id, t_high, h_high, s_high);
-        int n=snprintf(msg, sizeof(msg), "CFG|%s|TempTh: %.1f HumTh: %.1f Period: %d\r\n",
-                        node_id, t_high, h_high, period);
+        int n=snprintf(msg, sizeof(msg), "CFG|%s|TempTh: %.1f HumTh: %.1f SoilTh: %.1f Period: %d\r\n",
+                        node_id, t_high, h_high, s_high, period);
         if (n>0 && n < (int)sizeof(msg)){
             lora_uart_send((uint8_t*)msg, (size_t)n);
             // ESP_LOGI(TAG_LORA, "Sent CONFIG to %s: TempTh=%.1f HumTh=%.1f SoilTh=%.1f",
@@ -161,7 +159,6 @@ static void handle_one_line(char *buf)
             int idx = find_node_index_by_id(node_id);
             if (idx >= 0){
                 ESP_LOGI(pcTaskGetName(NULL),"Node %s request SEND (idx=%d)", node_id, idx);
-
                 // trả lời OK, cho phép node gửi DATA
                 send_ok_for_send_req(node_id);
             }
@@ -177,15 +174,16 @@ static void handle_one_line(char *buf)
     // 2) Node gửi dữ liệu: "DATA|<id>|Hum: xx.x Tmp: yy.y"
     else if (strncmp(buf, "DATA|", 5) == 0){
         char node_id[8] = {0};
-        float h, t;
+        float h, t, soil;
 
-        int matched = sscanf(buf,"DATA|%7[^|]|Hum: %f Tmp: %f", node_id, &h, &t);
-        if (matched == 3){
+        int matched = sscanf(buf,"DATA|%7[^|]|Hum: %f Tmp: %f Soil: %f", node_id, &h, &t, &soil);
+        if (matched == 4){
             int idx = find_node_index_by_id(node_id);
             if (idx >= 0){
-                g_node_humd[idx] = h;
-                g_node_temp[idx] = t;
-                ESP_LOGI(pcTaskGetName(NULL),"Node %s (idx=%d): Hum=%.1f Tmp=%.1f", node_id, idx, h, t);
+                g_nodes[idx].hum = h;
+                g_nodes[idx].temp = t;
+                g_nodes[idx].soil = soil;
+                ESP_LOGI(pcTaskGetName(NULL),"Node %s (idx=%d): Hum=%.1f Tmp=%.1f Soil=%.1f ", node_id, idx, h, t, soil);
                 // gửi ACK cho DATA (để node biết đã nhận)
                 send_ack_for_data(node_id);
             }
