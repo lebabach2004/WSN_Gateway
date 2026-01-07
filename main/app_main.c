@@ -44,6 +44,15 @@ SemaphoreHandle_t config_sem;          // có config mới
 #define NODE3 "0003"
 #define NODE4 "0004"
 
+#define CMD_SEND_REQUEST   0x01  
+#define CMD_SEND_OK        0x02  
+#define CMD_SENSOR_DATA    0x03  
+#define CMD_DATA_ACK       0x04  
+#define CMD_CFG_REQUEST    0x05  
+#define CMD_CFG_DATA       0x07  
+#define CMD_CFG_NOCHANGE   0x06 
+#define HEADER_BYTE        0xAA
+
 // Dữ liệu 4 node
 static const char *g_node_ids[2] = { NODE1, NODE2 };
 
@@ -70,9 +79,12 @@ void lora_uart_send(const uint8_t *data, size_t len){
 }
 
 // ==================== Tìm index node theo ID =================
-int find_node_index_by_id(const char *node_id){
-    for (int i = 0; i < 2; i++){
-        if (strcmp(node_id, g_node_ids[i]) == 0){
+int find_node_index_by_id(uint16_t id){
+    for (int i = 0; i < 2; i++)
+    {
+        uint16_t stored_id = (uint16_t)strtol(g_node_ids[i], NULL, 16);
+        if (stored_id == id)
+        {
             return i;
         }
     }
@@ -80,28 +92,26 @@ int find_node_index_by_id(const char *node_id){
 }
 
 // ==================== Gửi phản hồi =================
-void send_ok_for_send_req(const char *node_id)
+void send_ok_for_send_req(uint16_t id)
 {
-    char msg[32];
-    int len = snprintf(msg, sizeof(msg), "OK|%s\r\n", node_id);
-    if (len > 0 && len < sizeof(msg))
-    {
-        lora_uart_send((uint8_t*)msg, len);
-        ESP_LOGI("LORA", "Sent OK to %s", node_id);
-    }
+    uint8_t ok[4];
+    ok[0] = HEADER_BYTE;
+    ok[1] = (id >> 8) & 0xFF;
+    ok[2] = id & 0xFF;
+    ok[3] = CMD_SEND_OK;
+    uart_write_bytes(UART_NUM_1, (const char*)ok, 4);
 }
 // ==================== Gửi ACK cho DATA =================
-void send_ack_for_data(const char *node_id)
+void send_ack_for_data(uint16_t id)
 {
-    char msg[32];
-    int len = snprintf(msg, sizeof(msg), "ACK|%s\r\n", node_id);
-    if (len > 0 && len < sizeof(msg))
-    {
-        lora_uart_send((uint8_t*)msg, len);
-        ESP_LOGI("LORA", "Sent ACK to %s", node_id);
-    }
+    uint8_t ack[4];
+    ack[0] = HEADER_BYTE;
+    ack[1] = (id >> 8) & 0xFF;
+    ack[2] = id & 0xFF;
+    ack[3] = CMD_DATA_ACK;
+    uart_write_bytes(UART_NUM_1, (const char*)ack, 4);
 }
-void process_cfg_request(char *node_id, int idx){
+void process_cfg_request(uint16_t id, int idx){
     if(idx < 0 || idx >=2){
         ESP_LOGW(pcTaskGetName(NULL), "Invalid node index for CONFIG: %d", idx);
         return;
@@ -124,146 +134,128 @@ void process_cfg_request(char *node_id, int idx){
     }
     char msg[64];
     if(!is_new){
-        int n = snprintf(msg, sizeof(msg), "NO|%s\r\n", node_id);
-        if (n > 0) lora_uart_send((uint8_t*)msg, (size_t)n);
-        ESP_LOGI(TAG_LORA, "No change for %s, sent NOCHANGEDATA", node_id);
+        uint8_t nochange[4];
+        nochange[0] = HEADER_BYTE;
+        nochange[1] = (id >> 8) & 0xFF;
+        nochange[2] = id & 0xFF;
+        nochange[3] = CMD_CFG_NOCHANGE;
+        uart_write_bytes(UART_NUM_1, (const char*)nochange, 4);
+        ESP_LOGI(TAG_LORA, "Node %s: No CONFIG change, sent CFG_NOCHANGE", g_node_ids[idx]);
+        ESP_LOG_BUFFER_HEX(TAG_LORA, nochange, 4);
     }
     else{
-        // int n=snprintf(msg, sizeof(msg), "CFG|%s|TempTh: %.1f HumTh: %.1f SoilTh: %.1f\r\n",
-        //                node_id, t_high, h_high, s_high);
-        int n=snprintf(msg, sizeof(msg), "CFG|%s|TempTh: %.1f HumTh: %.1f SoilTh: %.1f Period: %d\r\n",
-                        node_id, t_high, h_high, s_high, period);
-        if (n>0 && n < (int)sizeof(msg)){
-            lora_uart_send((uint8_t*)msg, (size_t)n);
-            // ESP_LOGI(TAG_LORA, "Sent CONFIG to %s: TempTh=%.1f HumTh=%.1f SoilTh=%.1f",
-            //          node_id, t_high, h_high, s_high);
-            ESP_LOGI(TAG_LORA, "Sent CONFIG to %s: TempTh=%.1f HumTh=%.1f Period=%d",node_id, t_high, h_high, period);
-            g_saved_thresholds[idx].intialized = true;
-            g_saved_thresholds[idx].temperature_config = t_high;
-            g_saved_thresholds[idx].humidity_config    = h_high;
-            g_saved_thresholds[idx].soil_config        = s_high;
-            g_saved_thresholds[idx].period_sec         = period;
-        }
-        else{
-            ESP_LOGW(TAG_LORA, "Failed to build CFG frame for %s", node_id);
-        }
+        uint8_t cfg[20];
+        cfg[0] = HEADER_BYTE;
+        cfg[1] = (id >> 8) & 0xFF;
+        cfg[2] = id & 0xFF;
+        cfg[3] = CMD_CFG_DATA;
+        memcpy(&cfg[4],  &t_high, 4);
+        memcpy(&cfg[8],  &h_high, 4);
+        memcpy(&cfg[12], &s_high, 4);
+        memcpy(&cfg[16], &period, 4);
+        uart_write_bytes(UART_NUM_1, (const char*)cfg, 20);
+        ESP_LOGI(TAG_LORA, "Sent CONFIG to %s: TempTh=%.1f HumTh=%.1f SoilTh=%.1f Period=%d",
+                 g_node_ids[idx], t_high, h_high, s_high, period);
+        ESP_LOG_BUFFER_HEX(TAG_LORA, cfg, 20);
+        g_saved_thresholds[idx].intialized = true;
+        g_saved_thresholds[idx].temperature_config = t_high;
+        g_saved_thresholds[idx].humidity_config    = h_high;
+        g_saved_thresholds[idx].soil_config        = s_high;
+        g_saved_thresholds[idx].period_sec         = period;
+
     }
 }
-static void handle_one_line(char *buf)
+static void handle_one_line(uint8_t *buf,uint16_t len)
 {
-    // 1) Node xin gửi dữ liệu: "SEND|0001"
-    if (strncmp(buf, "SEND|", 5) == 0){
-        char node_id[8] = {0};
-        // ví dụ buffer: "SEND|0001\r\n"
-        if (sscanf(buf, "SEND|%7s", node_id) == 1){
-            int idx = find_node_index_by_id(node_id);
-            if (idx >= 0){
-                ESP_LOGI(pcTaskGetName(NULL),"Node %s request SEND (idx=%d)", node_id, idx);
-                // trả lời OK, cho phép node gửi DATA
-                send_ok_for_send_req(node_id);
-            }
-            else{
-                ESP_LOGW(pcTaskGetName(NULL), "SEND from unknown node_id: %s", node_id);
-                // nếu thích có thể gửi ERR|id ở đây
-            }
-        }
-        else{
-            ESP_LOGW(pcTaskGetName(NULL), "Parse SEND error: %s", buf);
-        }
+    if (len < 4) return;
+    if (buf[0] != HEADER_BYTE) return;
+    uint16_t id = ((uint16_t)buf[1] << 8) | buf[2];
+    int idx = find_node_index_by_id(id);
+    uint8_t cmd = buf[3];
+    if (cmd == CMD_SEND_REQUEST && len == 4 && idx >= 0)
+    {
+        ESP_LOGI(pcTaskGetName(NULL), "Node %s request SEND", g_node_ids[idx]);
+        send_ok_for_send_req(id);
     }
-    // 2) Node gửi dữ liệu: "DATA|<id>|Hum: xx.x Tmp: yy.y"
-    else if (strncmp(buf, "DATA|", 5) == 0){
-        char node_id[8] = {0};
-        float h, t, soil;
+    else if (cmd == CMD_SENSOR_DATA && len == 16 && idx >= 0)
+    {
+        float hum, temp, soil;
+        memcpy(&hum,  &buf[4],  4);
+        memcpy(&temp, &buf[8],  4);
+        memcpy(&soil, &buf[12], 4);
 
-        int matched = sscanf(buf,"DATA|%7[^|]|Hum: %f Tmp: %f Soil: %f", node_id, &h, &t, &soil);
-        if (matched == 4){
-            int idx = find_node_index_by_id(node_id);
-            if (idx >= 0){
-                g_nodes[idx].hum = h;
-                g_nodes[idx].temp = t;
-                g_nodes[idx].soil = soil;
-                ESP_LOGI(pcTaskGetName(NULL),"Node %s (idx=%d): Hum=%.1f Tmp=%.1f Soil=%.1f ", node_id, idx, h, t, soil);
-                // gửi ACK cho DATA (để node biết đã nhận)
-                send_ack_for_data(node_id);
-            }
-            else{
-                ESP_LOGW(pcTaskGetName(NULL),
-                         "DATA from unknown node_id: %s", node_id);
-            }
-        }
-        else
-        {
-            ESP_LOGW(pcTaskGetName(NULL),
-                     "Parse DATA error: %s", buf);
-        }
+        g_nodes[idx].hum = hum;
+        g_nodes[idx].temp = temp;
+        g_nodes[idx].soil = soil;
+        ESP_LOGI(pcTaskGetName(NULL), "Node %s DATA: Hum=%.1f Tmp=%.1f Soil=%.1f", g_node_ids[idx], hum, temp, soil);
+        send_ack_for_data(id);
     }
-    else if(strncmp(buf, "CONFIG?|", 7) == 0){
-        char node_id[8]={0};
-        if(sscanf(buf, "CONFIG?|%7s", node_id) == 1){
-            int idx = find_node_index_by_id(node_id);
-            if (idx >= 0){
-                process_cfg_request(node_id, idx);
-            }
-            else{
-                ESP_LOGW(pcTaskGetName(NULL),
-                         "CONFIG from unknown node_id: %s", node_id);
-            }
-        }
+    else if (cmd == CMD_CFG_REQUEST && len == 4 && idx >= 0)
+    {
+        ESP_LOGI(pcTaskGetName(NULL), "Node %s request CONFIG", g_node_ids[idx]);
+        process_cfg_request(id, idx);
     }
-    // 3) Loại gói khác
     else
     {
-        ESP_LOGW(pcTaskGetName(NULL),
-                 "Unknown packet: %s", buf);
+        ESP_LOGW(pcTaskGetName(NULL), "Unknown packet or invalid length from %s", g_node_ids[idx]);
     }
 }
 void task_rx(void *pvParameters)
 {
     ESP_LOGI(pcTaskGetName(NULL), "Start RX");
 
-    static char line_buf[256];
-    static int  line_idx = 0;
-
     uint8_t tmp[64];
+    static uint8_t frame[20];
+    static int fidx = 0;
 
     while (1)
     {
-        // đọc 1 mẻ byte từ UART (có thể là 1 byte, 10 byte, 50 byte...)
-        int rxLen = uart_read_bytes(UART_NUM_1, tmp, sizeof(tmp), pdMS_TO_TICKS(30)); // 10s timeout
+        int rxLen = uart_read_bytes(UART_NUM_1, tmp, sizeof(tmp), pdMS_TO_TICKS(30));
         if (rxLen > 0)
         {
             for (int i = 0; i < rxLen; i++)
             {
-                char c = (char)tmp[i];
-                // tránh tràn line_buf
-                if (line_idx < (int)sizeof(line_buf) - 1)
-                {
-                    line_buf[line_idx++] = c;
-                }
-                // gặp '\n' => kết thúc 1 dòng / 1 packet
-                if (c == '\n')
-                {
-                    line_buf[line_idx] = '\0'; // đóng chuỗi
+                uint8_t b = tmp[i];
 
-                    ESP_LOGI(pcTaskGetName(NULL),
-                             "RX line (%d): %s", line_idx, line_buf);
-                    handle_one_line(line_buf);  // xử lý SEND / DATA
-                    line_idx = 0; // reset cho dòng tiếp theo
+                if (fidx == 0)
+                {
+                    if (b == HEADER_BYTE){
+                        frame[0] = b;
+                        fidx = 1;
+                    }
+                    continue;
                 }
+                else {
+                    frame[fidx++] = b;
+                }
+
+                // nếu là gói 4 byte
+                if (fidx == 4)
+                {
+                    uint8_t cmd = frame[3];
+                    if (cmd == CMD_SEND_REQUEST || cmd == CMD_CFG_REQUEST)
+                    {
+                        ESP_LOG_BUFFER_HEX(TAG_LORA, frame, 4);
+                        handle_one_line(frame, 4);
+                        fidx = 0;
+                    }
+                }
+                // nếu là sensor 16 byte
+                else if (fidx == 16)
+                {
+                    ESP_LOG_BUFFER_HEX(TAG_LORA, frame, 16);
+                    handle_one_line(frame, 16);
+                    fidx = 0;
+                }
+                // nếu là config 20 byte
+                else if (fidx == 20)
+                {
+                    handle_one_line(frame, 20);
+                    fidx = 0;
+                }
+
+                if (fidx >= 20) fidx = 0;
             }
-            // nếu bị tràn buffer mà chưa thấy '\n' => drop
-            if (line_idx >= (int)sizeof(line_buf) - 1)
-            {
-                ESP_LOGW(pcTaskGetName(NULL),
-                         "Line too long, drop");
-                line_idx = 0;
-            }
-        }
-        else
-        {
-            // không nhận được gì trong 10s, chỉ log chơi
-            ESP_LOGD(pcTaskGetName(NULL), "No data for 10s");
         }
     }
 }
